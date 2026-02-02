@@ -1,8 +1,5 @@
 {
-  "requestFramePermissions": [
-    "microphone",
-    "camera"
-  ],
-  "name": "Gerador de Atas",
-  "description": "Utilize o seu microfone em tempo real, crie e gere ATAS profissionais sem grandes dificuldades. Faça seu cadastro e tenha uma área personalizada para suas ATAS"
+  "requestFramePermissions": [],
+  "name": "Atas Turbo AI",
+  "description": "Anexe o áudio de suas reuniões e receba uma ATA profissional e estruturada em segundos com a potência do Gemini 3 Flash."
 }
