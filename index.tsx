@@ -148,8 +148,18 @@ const App: React.FC = () => {
   };
 
   const fetchMeetings = async (userId: string) => {
-    const { data } = await supabase.from('meetings').select('*').order('created_at', { ascending: false });
-    if (data) setPastMeetings(data as any);
+    try {
+      const { data, error } = await supabase
+        .from('meetings')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      if (data) setPastMeetings(data as any);
+    } catch (err) {
+      console.error("Erro ao buscar reuniões:", err);
+    }
   };
 
   const fetchAllUsers = async () => {
@@ -315,6 +325,7 @@ const App: React.FC = () => {
 
     if (finalTranscriptions.length === 0) { setError("Nada foi falado."); return; }
     setIsGenerating(true);
+    setError(null);
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const transcript = finalTranscriptions.map(t => t.text).join(' ');
@@ -343,11 +354,31 @@ const App: React.FC = () => {
       });
       const data = JSON.parse(res.text || '{}');
       setAta(data);
+      
       if (user) {
-        await supabase.from('meetings').insert([{ ...data, user_id: user.id, action_items: data.actionItems }]);
-        fetchMeetings(user.id);
+        const { error: saveError } = await supabase.from('meetings').insert([{ 
+          title: data.title,
+          date: data.date,
+          time: data.time,
+          participants: data.participants,
+          agenda: data.agenda,
+          discussion: data.discussion,
+          decisions: data.decisions,
+          action_items: data.actionItems,
+          user_id: user.id 
+        }]);
+        
+        if (saveError) {
+          console.error("Erro ao arquivar ATA:", saveError);
+          setError("A ATA foi gerada, mas houve um erro ao salvá-la no seu histórico. Verifique as configurações do banco de dados.");
+        } else {
+          fetchMeetings(user.id);
+        }
       }
-    } catch (err) { setError("Erro ao gerar ATA."); }
+    } catch (err) { 
+      console.error("Erro ao gerar ATA:", err);
+      setError("Ocorreu um erro inesperado ao gerar a ATA. Tente novamente."); 
+    }
     finally { setIsGenerating(false); }
   };
 
@@ -370,7 +401,8 @@ const App: React.FC = () => {
     doc.setFont("helvetica", "normal"); doc.text(ata.decisions, 20, 147, { maxWidth: 170 });
     doc.setFont("helvetica", "bold"); doc.text("Ações:", 20, 170);
     doc.setFont("helvetica", "normal");
-    ata.actionItems.forEach((it, i) => doc.text(`- ${it}`, 25, 177 + (i * 7)));
+    const actionItems = ata.actionItems || [];
+    actionItems.forEach((it, i) => doc.text(`- ${it}`, 25, 177 + (i * 7)));
     doc.save(`ATA_${ata.title}.pdf`);
   };
 
@@ -512,9 +544,9 @@ const App: React.FC = () => {
                     <div className="p-5 bg-slate-900/50 rounded-2xl border border-white/5"><h4 className="text-[10px] font-black uppercase text-indigo-400 mb-2">Discussão Principal</h4><p className="text-sm text-slate-300 leading-relaxed italic">"{ata.discussion}"</p></div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="p-5 bg-emerald-500/5 rounded-2xl border border-emerald-500/10"><h4 className="text-[10px] font-black text-emerald-400 uppercase mb-2">Decisões</h4><p className="text-xs text-slate-300 leading-relaxed">{ata.decisions}</p></div>
-                      <div className="p-5 bg-orange-500/5 rounded-2xl border border-orange-500/10"><h4 className="text-[10px] font-black text-orange-400 uppercase mb-2">Ações / Pendências</h4><ul className="list-disc pl-4 text-xs text-slate-300 space-y-1">{ata.actionItems.map((ai, i) => <li key={i}>{ai}</li>)}</ul></div>
+                      <div className="p-5 bg-orange-500/5 rounded-2xl border border-orange-500/10"><h4 className="text-[10px] font-black text-orange-400 uppercase mb-2">Ações / Pendências</h4><ul className="list-disc pl-4 text-xs text-slate-300 space-y-1">{(ata.actionItems || []).map((ai, i) => <li key={i}>{ai}</li>)}</ul></div>
                     </div>
-                    <div className="p-4 bg-slate-900/30 rounded-xl"><h4 className="text-[10px] font-black uppercase text-slate-500 mb-2">Participantes Identificados</h4><div className="flex flex-wrap gap-2">{ata.participants.map((p, i) => <span key={i} className="px-2 py-1 bg-slate-800 rounded text-[10px] font-bold">{p}</span>)}</div></div>
+                    <div className="p-4 bg-slate-900/30 rounded-xl"><h4 className="text-[10px] font-black uppercase text-slate-500 mb-2">Participantes Identificados</h4><div className="flex flex-wrap gap-2">{(ata.participants || []).map((p, i) => <span key={i} className="px-2 py-1 bg-slate-800 rounded text-[10px] font-bold">{p}</span>)}</div></div>
                   </div>
                 ) : (
                   <div className="flex-grow flex flex-col">
